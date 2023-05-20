@@ -1,0 +1,57 @@
+---
+Title: "Solution for Assignment 1"
+Date: "01-08-2023"
+---
+
+## Question 1, and 2
+
+can have multiple approach.
+
+## Q3
+
+When we regress Y on X's in question 2, the intercept is not needed. Since we are using random numbers drawn from a normal distribution with mean=0, the intercept is not relevant.
+
+## Q4
+
+Histogram will be similar to a uniform distribution. 
+
+## Q5
+
+As randomly generated data is used for regression, we shouldn't expect an variables to be  significant. Relying on the alpha will not provide true count of significant variable given the high number of variables.
+
+## Q6
+
+You should get close to zero "true" discoveries here as BH procedure lowers the cut-off rate which decreases the false positive rate.
+
+## Question 7 and 8
+
+answers will vary
+
+
+## Question 9
+
+When we reject the null hypothesis, there is always the risk of a false positive. This data set (and most likely the chosen model) has many features / independent variables. The large number of features means a greater chance of false discoveries.
+
+
+## Question 10
+q = 0.1
+vals <- summary(model)$coef[-1,4] 
+pvals <- pvals[!is.na(pvals)]
+N <- length(pvals)
+
+k <- rank(pvals, ties.method="min")
+alpha <- max(pvals[ pvals <= (q*k/N) ])
+
+signif <- coef(model)[-1][pvals <= alpha]
+signif <- signif[!is.na(signif)]
+
+#estimated number of true discoveries
+est_true_disc <- round(length(signif) * 0.9)
+
+#plot
+sig <- factor(pvals <= alpha)
+o <- order(pvals)
+plot(pvals[o], log="xy", col=c("grey60","red")[sig[o]], pch=20, 
+     ylab="p-values", xlab="tests ordered by p-value", main = paste('FDR =',q))
+lines(1:N, q*(1:N) / N)
+

@@ -1,0 +1,105 @@
+---
+title: "452_Assignment_6"
+author: "Shaolong (Fred) Xue"
+date: "2023-02-25"
+output: html_document
+---
+
+```{r packages}
+library(tree)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+```
+
+### Question 1 - PCA
+
+#### Part 1 - How does PCA reduce variables? 
+
+PCA projects data from higher dimensional space is mapped to data in a lower dimensional space (e.g. 2D), while maximizing the variance or spread of data in the lower dimensional space. The full process of PCA involves a couple of steps: calculating the covariance matrix and sort the eigenvectors by eigenvalues, choose a cut-off component usually by looking at a plot (e.g. elbow), and transform the data to lower dimensions. 
+
+Note, dimension reduction (DR) only happens if we apply the last step of transforming the data. That's when we essentially rotate the coordinate system in a way that captures maximum variance in lower dimensions. And we decide to explain the data with this reduced dimensional space (e.g. 100D to 2D). Otherwise, PCA itself is "lossless" before transformation. 
+
+#### Part 2 - Limitations of PCA
+
+A downside of PCA is that the statistic outcome of the PCA is difficult to interpret and conceptualize. It's hard to put into words what the values for each variable within a principle component mean. 
+
+Standardization is also a crucial pre-requisite, so scaling of the data is required for PCA. 
+
+Also, choosing the number of principle components to keep is arbitrary and subjective. 75% total variance explained is a typical cut-off, but there's no clear rule so the results can vary from case to case and people to people. 
+
+PCA works best if the data is linear. If the relationship between variables are non-linear, DR outcome may not be appropriate. 
+
+### Question 2 - Trees
+
+The essence of decision trees is maximizing data likelihood or minimizing deviance, as usual. But instead of linear coefficients, decision trees have decision nodes. These are split-rules defined by some thresholds on some dimension of x variables. 
+
+A tree is grown through a sequence of splits. We start with all x variables at the top. At each decision node, the observations are split either left or right, depending on the split-rule (functions). Each split is independent from another. At the bottom, we have leaf nodes that contain the data subsets allocated based on the splits. Each subset is the average of sample y values. Usually, there are stopping rules like minimum number of observations within each leaf to stop a tree from growing further. 
+
+Overall, decision trees minimize heterogeneity (deviance) among all leaf nodes and maximize homogeneity within each leaf node. 
+
+There are two types trees: classification and regression trees (CART). The general way they are grown is the same. The difference is that classification trees have class probabilities at the leaf nodes (e.g. probability of raining), while regression trees have mean y values at the lead nodes (e.g. expected amount of rain). 
+
+### Question 3 - How is a Tree Pruned? 
+
+The motivation for pruning a tree is that CART can result in overfitting because the decision tree algorithm is greedy (has no defined stopping point). In other words, the tree may grow unwanted leaf nodes. 
+
+Pruning a tree is usually done from the bottom up. We remove the split that contributes least to deviance reduction. This is a backward check on improvement to out-of-sample (OOS) performance. With each split pruned, we get a new candidate tree. The result of pruning is a group of candidate trees. We then use cross validation (CV) to choose the candidate tree with the best OOS performance. A visible outcome is that pruned trees have less leaf nodes. 
+
+### Question 4 - Random Forest vs Regression
+
+Overall, parametric techniques such as regular linear regressions require certain assumptions such as linearity. When these assumptions are not met, which is usually the case in the real world, predictions from regressions can be unreliable. Un-parametric techniques, such as random forest, do not rely on such assumptions. Therefore, they usually outperform regression models in this sense.
+
+To dive in more specifically, random forest applies a model averaging technique of non-parametric algorithms. It averages over a bootstrapped sample of trees to reveal real patterns in the data. And very nicely, noisy signals usually get averaged out in the process. In other words, trees "protect" each other from their individual errors. As each tree is an independent estimate and is not overly complicated because it contains a limited subset of variables, averaging them out produces the optimal estimate, better accuracy and less bias. 
+
+In addition to protection against noise and outliers, bootstrapping and the subset of variables within each tree component of a random forest helps limit overfitting. And even though random forest doesn't produce a nice single tree for you to easily interpret the result, it provides OOS variable importance where you can easily identify important features. 
+
+Lastly, you don't have to worry about specifying interaction detection because decision trees does that automatically. 
+### Question 5 - Transactions Dataset
+```{r Question 5}
+transaction <- read.csv("Transaction.csv")
+head(transaction)
+summary(transaction)
+
+# converting dbl to factor for binary variables such as sex and payment_default
+transaction$PAYMENT_DEFAULT <- as.factor(transaction$payment_default)
+transaction$SEX <- as.factor(transaction$SEX)
+
+index <- sample(1:nrow(transaction), size = 0.8*nrow(transaction), replace = FALSE)
+tran_train <- transaction[index,]
+tran_test <- transaction[-index,]
+
+```
+
+#### CART
+```{r CART}
+## setting values to control tree growth
+ctrl <- rpart.control(minsplit = 1, minbucket = 1, cp = 0, maxdepth = 5)
+
+tree <- rpart(PAYMENT_DEFAULT ~ LIMIT_BAL + SEX + EDUCATION + AGE + MARRIAGE, data = tran_train, method = "class", control = ctrl)
+
+## plot the tree
+plot(tree, uniform = TRUE, main = "Classification Tree")
+text(tree, use.n = TRUE, all = TRUE, cex = 0.8)
+
+## predict with CART
+tree_pred <- predict(tree, newdata = tran_test, type= "class")
+acc_tree <- mean(tree_pred == tran_test$PAYMENT_DEFAULT)
+
+```
+
+The prediction accuracy of the CART model is about __0.7782__.
+
+#### Random Forest
+```{r Random Forest}
+rf <- randomForest(PAYMENT_DEFAULT ~ LIMIT_BAL + SEX + EDUCATION + AGE + MARRIAGE, data = tran_train, ntree = 500)
+
+print(rf)
+
+importance(rf)
+
+rf_pred <- predict(rf, newdata = tran_test)
+acc_rf <- mean(rf_pred == tran_test$PAYMENT_DEFAULT)
+```
+
+The prediction accuracy of the random forest model is about __0.7783__.

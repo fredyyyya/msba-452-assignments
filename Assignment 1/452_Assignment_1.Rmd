@@ -1,0 +1,169 @@
+---
+title: "452_Assignment_1"
+author: "Shaolong (Fred) Xue"
+date: "2023-01-09"
+output: html_document
+---
+
+```{r}
+library(stringr)
+library(tidyr)
+```
+
+#### __Question 1__
+```{r}
+# setting seed to last 4 phone number
+set.seed(7457) 
+
+# setting up a 10000 x 1001 matrix 
+m1 <- matrix(rnorm(10000*1001, 0, 1), nrow = 10000, ncol = 1001)
+```
+
+#### __Question 2__
+```{r}
+# creating column name list for X variables
+Xnames <- str_c("X", str_pad(1:1000, width = 1))
+
+# renaming the matrix
+colnames(m1) <- c("Y", Xnames)
+```
+
+#### __Question 3__
+```{r}
+# converting matrix to a data frame for regression
+m1df <- as.data.frame(m1)
+
+# regressing Y on all X variables, with intercept
+model <- glm(m1df$Y ~ ., data = m1df)
+
+# summary of models
+summary(model)
+```
+
+Our data here is just pure randomness. Intercept doesn't really convey any practical meaning and, thus,it doesn't matter that much if the true intercept is zero or not. But I'm choosing to keep the intercept because it nonetheless gives the model more freedom to capture all patterns in the data (even it's simply randomness). 
+
+#### __Question 4__
+```{r}
+p_values <- summary(model)$coefficients[-1,4]
+
+# histogram of p-values from model with intercept
+hist(p_values, main = "Histogram of p-values")
+```
+The p-values of our model seem to be uniformly distributed. 
+
+
+#### __Question 5__
+```{r}
+# 4 significant variables 
+table(p_values < 0.01)
+```
+
+In real significance term, I don't expect to find any significant variables because the data were drawn randomly from a standard normal distribution. There's no real meaning to the values. However, in reality, we found a few variables that are statistically significant. This is purely due to chance when we're testing so many variables. These significance cases are false discoveries. 
+
+#### __Question 6__
+```{r}
+# I'm using code from the course file, "fdr.R"
+
+## extract p-value cutoff for E[fdf] < q
+fdr <- function(pvals, q, plotit = FALSE){
+  pvals <- pvals[!is.na(pvals)]
+  N <- length(pvals)
+  
+  k <- rank(pvals, ties.method="min")
+  alpha <- max(pvals[ pvals <= (q*k/N) ])
+  
+  if(plotit){
+    sig <- factor(pvals <= alpha)
+    o <- order(pvals)
+    plot(pvals[o], log="xy", col=c("grey60","red")[sig[o]], pch=20, 
+      ylab="p-values", xlab="tests ordered by p-value", main = paste('FDR =',q))
+    lines(1:N, q*(1:N) / N)
+  }
+  
+  return(alpha)
+}
+
+fdr(p_values, 0.1, plotit = TRUE)
+```
+
+After applying the BH procedure to control the FDR, we actually find no real significant variables. 0 out of 1000. This is indeed expected because we know that the nature of the data is pure random noise. And this further confirms the fact that the previously tested significant variables are the result of mere statistical chance in the abundance of tests. . 
+
+#### __Question 7__
+```{r}
+autos <- read.csv("autos.csv")
+
+summary(autos)
+
+# most of the vehicles were priced around $10,000.
+hist(autos$price) 
+
+# bi-modal: most of the vehicles had around 80 hp; another cluster around 150hp
+hist(autos$horsepower) 
+
+# most of the vehicles weight around 2000-2500 lb
+hist(autos$curb_weight) 
+
+# price and horsepower are positively correlated
+plot(autos$horsepower, autos$price, 
+     main = "Auto Price and Horsepower",
+     xlab = "Horsepower",
+     ylab = "Auto Price ($)") 
+abline(lm(autos$price ~ autos$horsepower))
+
+# Four-door vehicles had more turbo charged engines. Surprising...
+mosaicplot(~ autos$aspiration + autos$num_of_doors,
+           main = "Number of Doors & Engine Aspiration",
+           xlab = "Aspiration", ylab = "Number of Doors",
+           color = c(2,4))
+
+# Most vehicles ran on gas; no 4wd vehicles used diesel fuel.  
+mosaicplot(~ autos$drive_wheels + autos$fuel_type,
+           main = "Fuel Type & Drive Wheels",
+           xlab = "Drive Wheels", ylab = "Fuel Type",
+           color = c(2,4,5))
+```
+
+#### __Question 8__
+```{r}
+# price ~ num_of_cylinders. R^2 = 0.56
+prediction <- lm(price ~ num_of_cylinders, data = autos)
+summary(prediction)
+
+# price ~ num_of_cylinders + make dummies. R^2 = 0.86. 20 coefficients
+prediction2 <- lm(price ~ num_of_cylinders + make, data = autos)
+summary(prediction2)
+
+# price ~ engine_size. R^2 = 0.79
+prediction3 <- lm(price ~ engine_size, data = autos)
+summary(prediction3)
+
+# price ~ all variables. R^2 = 0.96. 52 coefficients
+prediction4 <- lm(price ~ . , data = autos)
+summary(prediction4)
+
+# price ~ make dummies. R^2 = 0.8. 21 coefficients
+prediction5 <- lm(price ~ make, data = autos)
+summary(prediction5)
+
+cor(autos$num_of_cylinders, autos$engine_size)
+```
+
+From the models experimented, the one I'll go with is the model with all variables (Prediction4). I recognize there are downsides to this. Many of the variables are highly correlated with each other (e.g. number of cylinders and engine size). Multicollinearity can be a real issue here. Also, including so many variables (52 to be exact) can lead to significance by chance, or false discoveries from our current topic. However, since we're trying to demonstarte this in the homework, I'm going with this full model regardless. 
+
+In other cases, I'd pick a different model where I'd control multicollinearity and the number of variables. 
+
+#### __Question 9__
+
+Why false discoveries might be problematic here? 
+
+Theoretically, there are too many variables (52 to be exact) in the model. Some coefficients could be statistically significant due to chance. From the model summary, there are 27 significant values. But as we will identify with the BH procedure in the next question, there are only 19 truly significant variables. That's 8 variables the test has falsly discovered as significant. 
+
+Practically, if management make conclusion based on this discovery and establish policy and investment around falsely meaningful variables, it could lead to heavy loses and negative outcomes. 
+
+#### __Question 10__
+```{r}
+# extracting the p-values from the model with all variables - prediction4
+p_vals <- summary(prediction4)$coefficients[,4]
+
+fdr(p_vals, 0.1, plotit = TRUE)
+```

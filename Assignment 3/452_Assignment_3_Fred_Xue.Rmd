@@ -1,0 +1,257 @@
+---
+title: "452_Assignment_3"
+author: "Shaolong (Fred) Xue"
+date: "2023-01-27"
+output: html_document
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(caret)
+library(glmnet)
+```
+
+
+## Question 1 - Part 1
+```{r}
+hearts <- read.csv("heart.csv")
+
+summary(hearts)
+```
+
+#### Choosing Sample Subset
+
+From the summary of the data, a few columns are full or almost full of missing values. I will simply remove these columns: "family_record", "past_record", and "wrist_dim". Additionally, several columns also contain just a few missing values, ranging from 1 to 4. I will simply remove the rows with missing values for these columns. The collatoral removal of information will not make that much of a difference to the integrity of the dataset. After these two adjustments, the remaining will be my chosen sample subset. 
+
+#### Choosing Train/Fit Subset
+
+Typically, I would go for a 4:1 split of training and testing data. That means I will use 75% of the data for training the model and reserve the remaining 25% of the data for testing the model. 
+
+```{r}
+## removing all missing values
+hearts_nona <- hearts %>%
+  select(-family_record, -past_record, -wrist_dim) %>%
+  na.omit
+
+```
+
+## Question 1 - Part 2
+
+#### Train/Test Split
+```{r}
+set.seed(1)
+
+## adding id variable
+hearts_nona$id <- 1:nrow(hearts_nona)
+
+## 75% train; 25% test
+train <- hearts_nona %>% sample_frac(0.75)
+test <- dplyr::anti_join(hearts_nona, train, by = 'id')
+
+## removing id variable
+train <- train %>% select(-id)
+test <- test %>% select(-id)
+
+dim(train)
+dim(test)
+
+```
+
+#### Some EDA
+```{r}
+## original
+ggplot(train, aes(heart_attack)) +
+  geom_density(fill = "blue")
+
+## log transformed y
+ggplot(train, aes(log(heart_attack))) +
+  geom_density(fill = "red")
+
+## sqrt transformed y
+ggplot(train, aes(sqrt(heart_attack))) +
+  geom_density(fill = "green")
+
+```
+
+Log seems to be transforming the response variable the closest to normal. 
+
+#### SLR
+```{r}
+## the full model
+model1 <- lm(log(heart_attack) ~ ., data = train)
+summary(model1)
+
+## plotting the full model
+par(mfrow = c(2,2))
+plot(model1)
+```
+
+__Some quick observations__
+
+All predictors have a clear collective effect on the response, heart attack. Global F is 159.5 
+
+Among them, height and dimensions of height, neck, chest, abdomen, and thigh are significant. 
+
+The full model has a pretty good fit. Adjusted $R^2$ is 0.9368. 
+
+The data seems to be normally distributed and with minimal error variance. 
+
+#### Prediction and Test Set
+```{r}
+## prediction 
+pred1 <- predict(model1, newdata = test)
+
+# calculating rsme
+RMSE <- sqrt(sum((exp(pred1) - test$heart_attack)^2) / length(test$heart_attack))
+
+# calculating out-of-sample R^2
+os_sst <- sum((test$heart_attack - mean(train$heart_attack))^2)
+os_ssr <- sum((test$heart_attack - exp(pred1))^2)
+out_sample_R2 <- 1 - os_ssr / os_sst
+
+## R2(pred1, test$heart_attack)
+
+# storing in-sample R^2
+in_sample_R2 <- summary(model1)$r.squared
+
+result <- data.frame(in_sample_R2, out_sample_R2, RMSE)
+result
+```
+
+__Summary__
+
+The out-of-sample $R^2$ is 0.9. It is smaller than the in-sample $R^2$, which is 0.94. The RMSE is 1.12. It estimates on average how much of the predicted value will be from the actual value. In this case, 1.12 is pretty close. 
+
+## Question 2 - Cross Validation
+
+Overall, cross validation (CV) is a technique that evaluates the performance of a ML model. It divides the data into folds (e.g. 10), and then train and test the model on different combinations of the folds of data. Model performance is averaged from each fold, giving a better assessment. 
+
+CV has a few problems. It can be time consuming and technically expensive to run; it may overfit the model; it can lead to a biased estimate if the folds are not created randomly. 
+
+
+## Question 3 - 8-fold CV
+```{r}
+## set up for train() function
+train_control <- trainControl(method = "cv", number = 8)
+
+## training the model with CV
+model2 <- train(log(heart_attack) ~ ., data = train, 
+                method = "lm", 
+                trControl = train_control)
+
+print(model2)
+
+```
+
+__Comparison__
+
+The mean $R^2$ of the 8-fold CV on the full model is about 0.87. This is __lower__ than the out-of-sample $R^2$ I calculated earlier (0.903) without CV.
+
+This was a bit surprising to me, as I thought CV should return a "better" result than regressing regularly. Then I thought of two possible reasons why the CV approach is yielding a lower $R^2$ value. 
+
+1. The data we're using for CV is only the training set. The out-of-sample $R^2$ we calculated was based on predictions using the test data set. CV so far has never seen the test set. That's probably why there's difference. 
+
+2. The high $R^2$ value from Question 1 is not necessarily a good thing. It could mean that the model is over-fitting the data by including all of the variables. Although the CV technique is also applied on the full model, it nonetheless brings down the scale of over-fitting as shown by a lower $R^2$ value.  
+
+## Question 4 - Lasso Regression
+
+Lasso regression is a technique in linear regression that minimizes the coefficients of unimportant variables to zero, using a regularization term. Lasso regression tries to minimize deviance, which now includes the SSR plus a penalty function. The penalty is the sum of absolute values of the betas multiplied by a constant lambda. 
+
+Essentially, if the benefit of including a variable outweighs the cost, then it's included. Otherwise, the variable is excluded from the model. The lambda is the weight of the cost. The procedure starts with a large lambda (high cost factor) so no variable is included, goes over a sequence of decreasing lambda (lowering the cost factor; including more variables), and ends at a cut-off point (we don't want the cost to be so low that we include more variables than we need; over-fitting).
+
+The benefits of Lasso regression are obviously its function to feature the best variables that directly impact the response variable. And its ability to deal with a large number of x variables. 
+
+The cons of Lass regression include the fact that it is sensitive to scale and it doesn't deal with multicollinearity very well (a variable that strongly impact the response indirectly can be excluded). 
+
+## Question 5 - Part 1: CV Lasso
+```{r}
+## setting up response and predictors
+y <- train$heart_attack
+x <- data.matrix(train)[, -c(17)]
+
+model3 <- cv.glmnet(x, log(y))
+
+## storing the minimum and 1se lambda values
+lambda_min <- model3$lambda.min
+lambda_1se <- model3$lambda.1se
+
+data.frame(lambda_min, lambda_1se)
+
+plot(model3)
+```
+
+Using CV Lasso on the train data set, the __minimum lambda is about 0.0097__, and the __1 se counterbalance lambda is about 0.017__. 
+
+```{r}
+## running the CV Lasso models
+model4_min <- glmnet(x, log(y), alpha = 1, lambda = lambda_min)
+model5_1se <- glmnet(x, log(y), alpha = 1, lambda = lambda_1se)
+
+## showing the selected variables within each model 
+coef(model4_min)
+coef(model5_1se)
+
+```
+
+```{r}
+## predicting with model 4 (lambda_min) and model 5 (lambda_1se) on train data
+pred4 <- predict(model4_min, s = lambda_min, newx = x)
+pred5 <- predict(model5_1se, s = lambda_1se, newx = x)
+
+## R^2 for model 4
+sst_m4 <- sum((y-mean(y))^2)
+sse_m4 <- sum((exp(pred4) - y)^2)
+R2_m4 <- 1 - sse_m4 / sst_m4
+
+## R^2 for model 5
+sst_m5 <- sum((y-mean(y))^2)
+sse_m5 <- sum((exp(pred5) - y)^2)
+R2_m5 <- 1 - sse_m5 / sst_m5
+
+```
+
+#### Asssessment
+
+__Model 4__: 
+
+log(heart_attack) = 2.1 - 0.12density - 0.0018height + 0.0042neck_dim + 0.0063chest_dim + 0.0027abdom_dim + 0.0052thigh_dim + 0.00056biceps_dim
+
+The model selected with minimum lambda contains 7 variables plus the intercept. 
+
+__Model 5__:
+
+log(heart_attack) = 1.99 + 0.0016neck_dim + 0.0061chest_dim + 0.003abdom_dim + 0.0048thigh_dim
+
+The model selected with 1se lambda contains 4 variables plus the intercept. 
+
+## Question 5 - Part 2: Overall Comparison
+
+```{r}
+## Question 1 R^2
+lm_OOS_Rsquare <- out_sample_R2
+
+## Question 3 R^2
+CV_8fold_Rsquare <- model2$results$Rsquared
+
+## Question 5 R^2
+Lasso_min_Rsquare <- R2_m4
+Lasso_1se_Rsquare <- R2_m5
+
+data.frame(lm_OOS_Rsquare, CV_8fold_Rsquare, Lasso_min_Rsquare, Lasso_1se_Rsquare)
+
+```
+
+The Lasso regression selected with minimum lambda yields the highest $R^2$ value. 
+
+The OOS $R^2$ from the simple linear regression is comparable with the $R^2$ value from the Lasso selected with 1se lambda. 
+
+The $R^2$ value from 8-fold CV on training data is the lowest. 
+
+## Question 6
+
+Akaike Information Criterion (AIC) is a quality measure of model performance. AIC is the negative log-likelihood of the model plus a penalty term for the number of parameters (k) included. The lower the AIC, the better the model. 
+
+A drawback of AIC is that it tends to overfit in high dimensions. AIC-corrected (AICc) addresses this drawback by taking sample size into account. It does better with small sample sizes. Since AICc includes $k^2$, AIC is a first-order estimate while AICc is a second-order estimate. 
+
+For big n/df, AICc is similar to AIC. And as n approaches infinity, AICc converges to AIC. So, in practice, we should always use AICc as it covers the sample size issue that AIC lacks. 

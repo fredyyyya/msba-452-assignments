@@ -1,0 +1,60 @@
+---
+Title: "Solution for Assignment 3"
+Date: "01-25-2023"
+---
+
+## Question 1
+We will ensure that all the columns have values. Exclude columns in which most of the rows are N/A or empty. For the remaining columns we will treat milling values. Also we should select a relatively large training subset (70% to 85%). The objective of these exercises is to ensure that the training dataset is the representative of the overall dataset.
+
+
+1.2: For the dataset in Q1, we need to split such as train is 80%. Full model (lm) should be run without futher reducing the variables. R^2 should come around 0.9 (and may vary little depending on the steps used for missing value treatment)
+
+
+## Q2
+Cross Validation is the process of repeatedly training a model on a subset of the dataset. 
+Steps : 
+1) Divide the data set at random into training and test sets.
+2) Fit model on the training set.
+3) Test model on the test set.
+4) Compute and save fit statistics using test data (step 3).
+5) Repeat 1 - 4 several (K= folds) times, then average the results of all step 4.
+
+Problem: Time consuming,resource intensive, and not feasible with large data sizes
+
+
+## Q3
+
+Steps may vary: One illustrative step:
+
+train_control <- trainControl(method="cv", number=8)
+
+cross_model <- train(heart_attack ~., data=train,trControl = train_control, method = "lm")
+
+R^2 of the model will be between 0.84 and 0.92
+
+## Q4
+
+“LASSO” stands for Least Absolute Shrinkage and Selection Operator. It is a statistical formula for the regularisation of data models and feature selection and Lasso regression is one of the regularized regressions. It is a penalize regression method which imposes a penalty on the absolute values of model parameters.
+ 
+Benefits of Lasso: It is fast to use approach for feature selection and provides reliable accuracy. In general, it avoids over-fitting.
+
+Problems of Lasso: Automated approach and thus does might remove a significant variable if it has high multicolinearity. Sometimes it is tough to intepret why a certain feature was selected or rejected.
+
+
+## Q5
+Steps may vary.
+
+Library to be used: glmnet
+
+model <- cv.glmnet(xtrain, ytrain, nfolds = 8)
+
+Exact value of lamda will vary based on steps. The value should be around:
+Lamdamin ~0.3 to 0.6
+Lamda_1se ~0.6 to 0.85
+
+
+## Q6
+AIC (Akaike Information Criterion) measures model performance as an in-sample statistic measure that approximates OOS deviance (in-sample deviance + 2*df). 
+AICc is the corrected AIC. It is used when dealing with a low number of records per df. AICc is calculated as “Deviance + 2df * (n/n-df-1)”.
+
+
