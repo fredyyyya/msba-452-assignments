@@ -2,4 +2,4 @@
 
 ### Summary
 
-This repository holds assignments completed in teh 453-Machine Learning course in the MSBA program at UC Davis
+This repository holds assignments completed in 453-Machine Learning course in the MSBA program at UC Davis
